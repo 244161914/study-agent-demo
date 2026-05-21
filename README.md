@@ -6,6 +6,10 @@
 
 当前版本是 v0.1 local closed-loop prototype，重点展示产品结构、交互流程、结构化输出格式和 localStorage 本地记录能力。
 
+## 在线 Demo
+
+在线体验地址：[https://study-agent-demo.vercel.app/](https://study-agent-demo.vercel.app/)
+
 ## 核心定位
 
 项目定位是“题目驱动的中文学习任务管理器”：先用习题倒推需要复习的课件范围，再通过速懂、讲解、错题定位和期末复习规划形成持续迭代的学习闭环。
