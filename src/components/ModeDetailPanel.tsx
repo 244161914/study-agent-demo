@@ -66,9 +66,18 @@ export function ModeDetailPanel({
       </div>
 
       <form className="mt-6 space-y-3" onSubmit={(event) => event.preventDefault()}>
-        <label className="block text-sm font-semibold text-slate-950" htmlFor="mode-input">
-          简单占位表单
-        </label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <label className="text-sm font-semibold text-slate-950" htmlFor="mode-input">
+            简单占位表单
+          </label>
+          <button
+            className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            type="button"
+            onClick={() => onInputChange(mode.sampleInput)}
+          >
+            填入示例
+          </button>
+        </div>
         <textarea
           className="min-h-32 w-full resize-y rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
           id="mode-input"

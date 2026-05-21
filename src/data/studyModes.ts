@@ -21,6 +21,7 @@ export type StudyMode = {
   nextAssistantMode: AssistantMode
   status: string
   formPlaceholder: string
+  sampleInput: string
   mockResult: StructuredMockResult
 }
 
@@ -36,6 +37,7 @@ export const studyModes: StudyMode[] = [
     nextAssistantMode: 'lecture-quick-understand',
     status: '前端占位：整理筛选思路',
     formPlaceholder: '例如：第 3 章函数极限相关习题 12、15、18，我不确定应该先看哪些课件页。',
+    sampleInput: '第 3 章函数极限相关习题 12、15、18，我不确定应该先看哪些课件页。',
     mockResult: {
       conclusion: '优先从题目反复出现的概念入手，先缩小到最可能相关的课件范围。',
       facts: '题目中出现了章节、题型和考点线索，但当前不会读取课件文件。',
@@ -57,6 +59,7 @@ export const studyModes: StudyMode[] = [
     nextAssistantMode: 'single-question',
     status: '前端占位：展示速懂结构',
     formPlaceholder: '例如：第 24-31 页，主题是导数定义、求导法则和切线方程，课堂重点是链式法则。',
+    sampleInput: '课件 Week 15，页码 12-18，目标是快速知道这些页怎么用于做题。',
     mockResult: {
       conclusion: '这段范围适合先看定义，再看公式，最后用一道典型题检查理解。',
       facts: '你提供的是手动输入的课件范围/重点，不包含自动课件读取。',
@@ -78,6 +81,7 @@ export const studyModes: StudyMode[] = [
     nextAssistantMode: 'mistake-diagnosis',
     status: '前端占位：展示讲解框架',
     formPlaceholder: '例如：题目要求求切线方程，我知道要先求导，但不知道代入哪个点。',
+    sampleInput: '已知一个二阶系统传递函数，要求判断稳定性并画出响应趋势。',
     mockResult: {
       conclusion: '这道题可以拆成识别条件、选择公式、代入计算和检查单位四步。',
       facts: '你提供了题目和卡住的位置，当前按钮不会调用真实 AI。',
@@ -99,6 +103,7 @@ export const studyModes: StudyMode[] = [
     nextAssistantMode: 'exam-planner',
     status: '前端占位：展示定位维度',
     formPlaceholder: '例如：我把符号写反了，最后答案差一个负号，但不知道是计算错还是概念错。',
+    sampleInput: '我把公式选错了，不知道为什么这题不能直接套上一题的方法。',
     mockResult: {
       conclusion: '这类错误需要区分审题、概念、公式选择和计算执行四种来源。',
       facts: '你输入了错误表现和自己的思路记录，系统只展示前端 mock 结果。',
@@ -120,6 +125,7 @@ export const studyModes: StudyMode[] = [
     nextAssistantMode: 'exercise-filter',
     status: '前端占位：展示规划模板',
     formPlaceholder: '例如：距离考试还有 10 天，第 2、4 章错题最多，每天大约有 2 小时复习时间。',
+    sampleInput: '考试还有 10 天，每天 5 小时，目标通过补考，基础薄弱。',
     mockResult: {
       conclusion: '复习计划应先覆盖高频错题章节，再安排整卷训练和考前回顾。',
       facts: '你提供了考试时间、薄弱章节和可用时间，当前没有自动验证课件内容。',
