@@ -673,6 +673,40 @@ export default function App() {
             </p>
           </div>
         </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-semibold text-blue-600">路线图</p>
+          <h2 className="mt-2 text-xl font-bold text-slate-950">从本地闭环到 AI 学习助手</h2>
+          <div className="mt-5 grid gap-3 text-sm leading-6 md:grid-cols-2 xl:grid-cols-5">
+            <RoadmapItem title="v0.1.x" text="本地闭环学习任务管理" />
+            <RoadmapItem title="v0.2" text="AI 处理粘贴文本" />
+            <RoadmapItem title="v0.3" text="文本课件库" />
+            <RoadmapItem title="v0.4" text="PDF 文本提取与页码切片" />
+            <RoadmapItem title="v1.0" text="上传课件 + AI + 页码引用 + 复习闭环" />
+          </div>
+        </section>
+
+        <footer className="flex flex-col gap-3 border-t border-slate-200 py-6 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-semibold text-slate-700">当前版本：v0.1.6</p>
+          <div className="flex flex-wrap gap-4">
+            <a
+              className="font-semibold text-blue-600 transition hover:text-blue-800"
+              href="https://study-agent-demo.vercel.app/"
+              rel="noreferrer"
+              target="_blank"
+            >
+              在线 Demo
+            </a>
+            <a
+              className="font-semibold text-blue-600 transition hover:text-blue-800"
+              href="https://github.com/244161914/study-agent-demo"
+              rel="noreferrer"
+              target="_blank"
+            >
+              GitHub 仓库
+            </a>
+          </div>
+        </footer>
       </section>
     </main>
   )
@@ -789,6 +823,20 @@ function MasteryListItem({ record }: { record: MasteryRecord }) {
       <p className="text-slate-600">level：{record.level}</p>
       <p className="text-slate-600">evidence：{record.evidence}</p>
       <p className="text-slate-600">updatedAt：{formatDateTime(record.updatedAt)}</p>
+    </article>
+  )
+}
+
+type RoadmapItemProps = {
+  title: string
+  text: string
+}
+
+function RoadmapItem({ title, text }: RoadmapItemProps) {
+  return (
+    <article className="rounded-md bg-slate-50 p-4">
+      <h3 className="font-bold text-slate-950">{title}</h3>
+      <p className="mt-1 text-slate-600">{text}</p>
     </article>
   )
 }
