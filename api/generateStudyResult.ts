@@ -83,6 +83,26 @@ function trimField(value: string) {
     : trimmedValue
 }
 
+function normalizeField(value: unknown) {
+  if (typeof value === 'string') {
+    return trimField(value)
+  }
+
+  if (Array.isArray(value)) {
+    return trimField(
+      value
+        .map((item) => (typeof item === 'string' ? item : JSON.stringify(item)))
+        .join('\n'),
+    )
+  }
+
+  if (value && typeof value === 'object') {
+    return trimField(JSON.stringify(value))
+  }
+
+  return null
+}
+
 function validateAndNormalizeStudyResult(value: unknown): StudyResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('AI 返回格式无效：结果必须是 JSON 对象。')
@@ -107,11 +127,13 @@ function validateAndNormalizeStudyResult(value: unknown): StudyResult {
       throw new Error(`AI 返回格式不完整：缺少字段 ${key}。`)
     }
 
-    if (typeof result[key] !== 'string') {
-      throw new Error(`AI 返回格式无效：字段 ${key} 必须是字符串。`)
+    const normalizedField = normalizeField(result[key])
+
+    if (!normalizedField) {
+      throw new Error(`AI 返回格式无效：字段 ${key} 必须是非空字符串、数组或对象。`)
     }
 
-    normalizedResult[key] = trimField(result[key])
+    normalizedResult[key] = normalizedField
   }
 
   return normalizedResult
@@ -126,7 +148,32 @@ function parseStudyResult(outputText: string) {
 function createPrompt(modeName: string, input: string, masteryLevel: unknown, mistakeReason: unknown) {
   const mistakeReasonText = mistakeReason ? `\n错题原因：${mistakeReason}` : ''
 
-  return `模式：${modeName}\n掌握度自评：${masteryLevel ?? '未提供'}${mistakeReasonText}\n\n用户粘贴文本：\n${input}\n\n请生成学习闭环结构化结果。必须只输出 JSON，字段必须是 conclusion、facts、inferences、suggestions、uncertainty、verificationMethod、nextStep。`
+  return `模式：${modeName}
+掌握度自评：${masteryLevel ?? '未提供'}${mistakeReasonText}
+
+用户粘贴文本：
+${input}
+
+请生成学习闭环结构化结果。
+必须遵守：
+- Return only valid JSON.
+- Return exactly these 7 keys: conclusion, facts, inferences, suggestions, uncertainty, verificationMethod, nextStep.
+- Every value must be a plain string.
+- Do not return arrays.
+- Do not return nested objects.
+- Do not return markdown.
+- Do not wrap JSON in code fences.
+
+JSON example:
+{
+  "conclusion": "string",
+  "facts": "string",
+  "inferences": "string",
+  "suggestions": "string",
+  "uncertainty": "string",
+  "verificationMethod": "string",
+  "nextStep": "string"
+}`
 }
 
 async function generateWithOpenAI(prompt: string) {
@@ -190,7 +237,7 @@ async function generateWithDeepSeek(prompt: string) {
         {
           role: 'system',
           content:
-            '你是一个中文学习任务管理助手。只处理用户粘贴的文本，不声称读取、解析或验证 PDF、文件、课件原文。必须只输出合法 JSON。',
+            '你是一个中文学习任务管理助手。只处理用户粘贴的文本，不声称读取、解析或验证 PDF、文件、课件原文。必须只输出合法 JSON。每个字段值都必须是普通字符串，不能是数组、对象、markdown 或代码块。',
         },
         { role: 'user', content: prompt },
       ],
