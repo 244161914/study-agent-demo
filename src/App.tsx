@@ -452,13 +452,16 @@ export default function App() {
   const latestTasks = getLatestItems(course.tasks)
   const latestMistakes = getLatestItems(course.mistakes)
   const latestMasteryRecords = getLatestItems(course.mastery)
-  const recommendedTaskText = recommendedTask
-    ? `${recommendedTask.title}（${recommendedTask.status === 'doing' ? '进行中' : '待做'}）`
-    : '暂无任务，建议从习题导向筛选开始'
+  const hasLocalRecords =
+    course.runs.length > 0 ||
+    course.tasks.length > 0 ||
+    course.mistakes.length > 0 ||
+    course.mastery.length > 0
   const todayAction = latestDoingTask
     ? {
         title: latestDoingTask.title,
         reason: '因为它已经处于进行中，优先继续能减少切换成本。',
+        buttonLabel: '继续进行中任务',
         mode: latestDoingTask.nextMode,
         prompt: getTaskPrompt(latestDoingTask),
       }
@@ -466,6 +469,7 @@ export default function App() {
       ? {
           title: latestTodoTask.title,
           reason: '因为它是最新待做任务，适合接着推进闭环。',
+          buttonLabel: '继续这个任务',
           mode: latestTodoTask.nextMode,
           prompt: getTaskPrompt(latestTodoTask),
         }
@@ -473,6 +477,7 @@ export default function App() {
         ? {
             title: `复盘错题：${latestMistake.reason}`,
             reason: '因为已有错题记录，先复盘最近错题能补上学习闭环。',
+            buttonLabel: '复盘最近错题',
             mode: 'mistake-diagnosis' as AssistantMode,
             prompt: `复盘这道错题：${summarizeInput(latestMistake.questionText)}；错因：${latestMistake.reason}；下一步：${latestMistake.nextAction}`,
           }
@@ -480,12 +485,14 @@ export default function App() {
           ? {
               title: `补低掌握度：${latestLowMasteryRecord.topic}`,
               reason: '因为这个知识点掌握度不高，适合先回看并做一次针对性练习。',
+              buttonLabel: '复习低掌握度知识点',
               mode: 'lecture-quick-understand' as AssistantMode,
               prompt: `复盘低掌握度知识点：${latestLowMasteryRecord.topic}；当前掌握度：${latestLowMasteryRecord.level}；证据：${latestLowMasteryRecord.evidence}`,
             }
           : {
               title: '从习题导向筛选开始',
               reason: '因为当前还没有足够本地记录，先用一道题建立第一条闭环。',
+              buttonLabel: '开始第一次闭环',
               mode: 'exercise-filter' as AssistantMode,
               prompt: '',
             }
@@ -508,61 +515,23 @@ export default function App() {
           </p>
         </header>
 
-        <section className="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="rounded-lg border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-emerald-700">今日学习入口</p>
+              <p className="text-sm font-semibold text-blue-600">今日学习入口</p>
               <h2 className="mt-2 text-2xl font-bold text-slate-950">当前最该做：{todayAction.title}</h2>
               <p className="mt-3 text-sm leading-6 text-slate-600">推荐原因：{todayAction.reason}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                推荐路径：选模式 → 填示例 → 生成结果 → 保存下一步任务
+              </p>
             </div>
             <button
-              className="rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+              className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
               type="button"
               onClick={() => continueWithMode(todayAction.mode, todayAction.prompt)}
             >
-              继续这个任务
+              {todayAction.buttonLabel}
             </button>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold text-blue-600">推荐开始方式</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-950">第一次使用先跑一遍闭环</h2>
-              <p className="mt-3 text-base leading-7 text-slate-700">
-                第一次使用建议：点击「开始一次学习闭环」→ 点击「填入示例」→ 点击「生成结构化结果」。
-              </p>
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <button
-                  className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
-                  type="button"
-                  onClick={handleStartLearningLoop}
-                >
-                  开始一次学习闭环
-                </button>
-                <button
-                  className="rounded-md border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-4 focus:ring-blue-100"
-                  type="button"
-                  onClick={handleContinueLastTask}
-                >
-                  继续上次任务
-                </button>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{recommendedTaskText}</p>
-            </div>
-
-            <ol className="grid gap-3 text-sm leading-6">
-              <li className="rounded-md bg-blue-50 p-4 text-blue-950">
-                <span className="font-bold">1. 选模式</span>
-              </li>
-              <li className="rounded-md bg-slate-50 p-4 text-slate-800">
-                <span className="font-bold">2. 填信息或用示例</span>
-              </li>
-              <li className="rounded-md bg-slate-50 p-4 text-slate-800">
-                <span className="font-bold">3. 生成结果并保存下一步任务</span>
-              </li>
-            </ol>
           </div>
         </section>
 
@@ -599,36 +568,42 @@ export default function App() {
               当前记录只保存在本浏览器，不上传云端；清除浏览器数据会丢失记录。
             </p>
           </div>
-          <div className="mt-4 grid gap-4 text-sm leading-6 md:grid-cols-2 xl:grid-cols-4">
-            <ActionSummaryCard
-              actionLabel="继续"
-              label="当前最该做的一件事"
-              value={todayAction.title}
-              onAction={() => continueWithMode(todayAction.mode, todayAction.prompt)}
-            />
-            <ActionSummaryCard
-              actionLabel={recommendedTask ? '继续' : '开始'}
-              label="未完成任务"
-              value={`${unfinishedTaskCount} 个`}
-              onAction={recommendedTask ? () => handleContinueTask(recommendedTask) : handleStartLearningLoop}
-            />
-            <ActionSummaryCard
-              actionLabel={latestMistake ? '复盘' : '查看'}
-              label="待复盘错题"
-              value={`${course.mistakes.length} 条`}
-              onAction={latestMistake ? () => handleContinueMistake(latestMistake) : undefined}
-            />
-            <ActionSummaryCard
-              actionLabel={latestLowMasteryRecord ? '复盘' : '查看'}
-              label="低掌握度知识点"
-              value={lowestMasteryTopic ?? `${lowMasteryCount} 个`}
-              onAction={
-                latestLowMasteryRecord
-                  ? () => handleReviewMastery(latestLowMasteryRecord)
-                  : undefined
-              }
-            />
-          </div>
+          {hasLocalRecords ? (
+            <div className="mt-4 grid gap-4 text-sm leading-6 md:grid-cols-2 xl:grid-cols-4">
+              <ActionSummaryCard
+                actionLabel="继续"
+                label="当前最该做的一件事"
+                value={todayAction.title}
+                onAction={() => continueWithMode(todayAction.mode, todayAction.prompt)}
+              />
+              <ActionSummaryCard
+                actionLabel={recommendedTask ? '继续' : '开始'}
+                label="未完成任务"
+                value={`${unfinishedTaskCount} 个`}
+                onAction={recommendedTask ? () => handleContinueTask(recommendedTask) : handleStartLearningLoop}
+              />
+              <ActionSummaryCard
+                actionLabel={latestMistake ? '复盘' : '查看'}
+                label="待复盘错题"
+                value={`${course.mistakes.length} 条`}
+                onAction={latestMistake ? () => handleContinueMistake(latestMistake) : undefined}
+              />
+              <ActionSummaryCard
+                actionLabel={latestLowMasteryRecord ? '复盘' : '查看'}
+                label="低掌握度知识点"
+                value={lowestMasteryTopic ?? `${lowMasteryCount} 个`}
+                onAction={
+                  latestLowMasteryRecord
+                    ? () => handleReviewMastery(latestLowMasteryRecord)
+                    : undefined
+                }
+              />
+            </div>
+          ) : (
+            <p className="mt-4 rounded-md bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+              暂无学习记录。完成一次生成后，这里会显示下一步任务、错题和掌握度。
+            </p>
+          )}
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -692,9 +667,9 @@ export default function App() {
           </div>
 
           <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-5">
-            <h2 className="text-base font-bold text-amber-950">v0 限制提示</h2>
+            <h2 className="text-base font-bold text-amber-950">当前能力边界</h2>
             <p className="mt-3 text-sm leading-7 text-amber-900">
-              当前为 v0 前端演示版：不真实解析 PDF，不接真实 AI，不自动验证课件内容；仅展示学习闭环和结构化输出。
+              当前版本为本地前端演示：不解析 PDF、不接真实 AI、不自动验证课件内容；结果用于展示学习闭环结构。
             </p>
           </div>
         </section>

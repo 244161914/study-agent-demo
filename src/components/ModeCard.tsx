@@ -9,9 +9,9 @@ type ModeCardProps = {
 export function ModeCard({ mode, isActive, onSelect }: ModeCardProps) {
   return (
     <button
-      className={`flex h-full w-full flex-col rounded-lg border p-5 text-left shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+      className={`flex h-full w-full flex-col rounded-lg border-2 p-5 text-left shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100 ${
         isActive
-          ? 'border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200'
+          ? 'border-blue-600 bg-blue-50 shadow-md ring-2 ring-blue-200'
           : 'border-slate-200 bg-white'
       }`}
       type="button"
@@ -25,7 +25,7 @@ export function ModeCard({ mode, isActive, onSelect }: ModeCardProps) {
         </div>
         <span
           className={`rounded-full px-3 py-1 text-sm font-medium ${
-            isActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700'
+            isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
           }`}
         >
           {isActive ? '已选中' : 'v0 演示'}
