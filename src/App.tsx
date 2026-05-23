@@ -111,6 +111,122 @@ function getRecommendedTask(tasks: StudyTask[]) {
   return [...tasks].reverse().find((task) => task.status === 'todo')
 }
 
+function getLatestTaskByStatus(tasks: StudyTask[], status: StudyTask['status']) {
+  return [...tasks].reverse().find((task) => task.status === status)
+}
+
+function getLatestLowMasteryRecord(mastery: MasteryRecord[]) {
+  return [...mastery].reverse().find((record) => record.level <= 1)
+}
+
+function getTaskPrompt(task: StudyTask) {
+  const pageRangeText = task.relatedPageRange ? `；相关范围：${task.relatedPageRange}` : ''
+
+  return `${task.title}${pageRangeText}`
+}
+
+function downloadTextFile(fileName: string, content: string) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function createMarkdownExport(course: Course) {
+  const lines = [
+    '# study-agent-demo 本地学习记录',
+    '',
+    `课程：${course.name}`,
+    `导出时间：${new Date().toLocaleString('zh-CN')}`,
+    '',
+    '## 生成记录',
+    ...formatRunsForExport(course.runs),
+    '',
+    '## 任务',
+    ...formatTasksForExport(course.tasks),
+    '',
+    '## 错题',
+    ...formatMistakesForExport(course.mistakes),
+    '',
+    '## 掌握度记录',
+    ...formatMasteryForExport(course.mastery),
+    '',
+  ]
+
+  return lines.join('\n')
+}
+
+function formatRunsForExport(runs: AssistantRun[]) {
+  if (runs.length === 0) {
+    return ['暂无生成记录。']
+  }
+
+  return runs.map((run, index) =>
+    [
+      `${index + 1}. ${getModeName(run.mode)}`,
+      `   - 创建时间：${formatDateTime(run.createdAt)}`,
+      `   - 输入：${run.input}`,
+      `   - 输出：${run.output.replace(/\n/g, ' / ')}`,
+      `   - 不确定：${run.uncertainty}`,
+      `   - 如何验证：${run.verificationMethod}`,
+      `   - 下一步：${getModeName(run.nextMode)}`,
+    ].join('\n'),
+  )
+}
+
+function formatTasksForExport(tasks: StudyTask[]) {
+  if (tasks.length === 0) {
+    return ['暂无任务。']
+  }
+
+  return tasks.map((task, index) =>
+    [
+      `${index + 1}. ${task.title}`,
+      `   - 状态：${task.status}`,
+      `   - 来源模式：${getModeName(task.sourceMode)}`,
+      `   - 下一步模式：${getModeName(task.nextMode)}`,
+      `   - 相关范围：${task.relatedPageRange || '暂无'}`,
+      `   - 创建时间：${formatDateTime(task.createdAt)}`,
+    ].join('\n'),
+  )
+}
+
+function formatMistakesForExport(mistakes: MistakeRecord[]) {
+  if (mistakes.length === 0) {
+    return ['暂无错题记录。']
+  }
+
+  return mistakes.map((mistake, index) =>
+    [
+      `${index + 1}. ${mistake.questionTitle}`,
+      `   - 错因：${mistake.reason}`,
+      `   - 题目摘要：${summarizeInput(mistake.questionText)}`,
+      `   - 掌握度：${mistake.masteryAfter}`,
+      `   - 下一步行动：${mistake.nextAction}`,
+      `   - 创建时间：${formatDateTime(mistake.createdAt)}`,
+    ].join('\n'),
+  )
+}
+
+function formatMasteryForExport(mastery: MasteryRecord[]) {
+  if (mastery.length === 0) {
+    return ['暂无掌握度记录。']
+  }
+
+  return mastery.map((record, index) =>
+    [
+      `${index + 1}. ${record.topic}`,
+      `   - level：${record.level}`,
+      `   - evidence：${record.evidence}`,
+      `   - updatedAt：${formatDateTime(record.updatedAt)}`,
+    ].join('\n'),
+  )
+}
+
 function createExamPlannerResult(course: Course): StructuredMockResult {
   const unfinishedTasks = course.tasks.filter((task) => task.status !== 'done')
   const mostCommonReason = getMostCommonMistakeReason(course.mistakes)
@@ -173,6 +289,26 @@ export default function App() {
   const selectedMode =
     studyModes.find((mode) => mode.id === selectedModeId) ?? studyModes[0]
 
+  function focusInputArea() {
+    window.setTimeout(() => {
+      const inputElement = document.getElementById('mode-input')
+
+      inputElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      inputElement?.focus()
+    }, 0)
+  }
+
+  function continueWithMode(mode: AssistantMode, prompt: string) {
+    const nextMode = studyModes.find((studyMode) => studyMode.assistantMode === mode)
+
+    setSelectedModeId(nextMode?.id ?? studyModes[0].id)
+    setGeneratedModeId(null)
+    setGeneratedResult(null)
+    setFormInput(prompt)
+    setSaveMessage('')
+    focusInputArea()
+  }
+
   function handleSelectMode(modeId: number) {
     setSelectedModeId(modeId)
     setGeneratedModeId(null)
@@ -182,14 +318,7 @@ export default function App() {
   }
 
   function handleStartLearningLoop() {
-    handleSelectMode(studyModes[0].id)
-
-    window.setTimeout(() => {
-      const inputElement = document.getElementById('mode-input')
-
-      inputElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      inputElement?.focus()
-    }, 0)
+    continueWithMode('exercise-filter', '')
   }
 
   function handleContinueLastTask() {
@@ -200,20 +329,29 @@ export default function App() {
       return
     }
 
-    const nextMode = studyModes.find((mode) => mode.assistantMode === task.nextMode)
+    continueWithMode(task.nextMode, getTaskPrompt(task))
+  }
 
-    if (nextMode) {
-      handleSelectMode(nextMode.id)
-    }
+  function handleContinueTask(task: StudyTask) {
+    continueWithMode(task.nextMode, getTaskPrompt(task))
+  }
 
-    setFormInput(task.title)
+  function handleContinueMistake(mistake: MistakeRecord) {
+    continueWithMode(
+      'mistake-diagnosis',
+      `复盘这道错题：${summarizeInput(mistake.questionText)}；错因：${mistake.reason}；下一步：${mistake.nextAction}`,
+    )
+  }
 
-    window.setTimeout(() => {
-      const inputElement = document.getElementById('mode-input')
+  function handleReviewMastery(record: MasteryRecord) {
+    continueWithMode(
+      'lecture-quick-understand',
+      `复盘低掌握度知识点：${record.topic}；当前掌握度：${record.level}；证据：${record.evidence}`,
+    )
+  }
 
-      inputElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      inputElement?.focus()
-    }, 0)
+  function handleExportMarkdown() {
+    downloadTextFile('study-agent-demo-records.md', createMarkdownExport(course))
   }
 
   function handleGenerateResult() {
@@ -303,7 +441,12 @@ export default function App() {
   }
 
   const recommendedTask = getRecommendedTask(course.tasks)
+  const latestDoingTask = getLatestTaskByStatus(course.tasks, 'doing')
+  const latestTodoTask = getLatestTaskByStatus(course.tasks, 'todo')
+  const latestMistake = course.mistakes.at(-1)
+  const latestLowMasteryRecord = getLatestLowMasteryRecord(course.mastery)
   const unfinishedTaskCount = course.tasks.filter((task) => task.status !== 'done').length
+  const lowMasteryCount = course.mastery.filter((record) => record.level <= 1).length
   const lowestMasteryTopic = getLowestMasteryTopic(course.mastery)
   const latestRuns = getLatestItems(course.runs)
   const latestTasks = getLatestItems(course.tasks)
@@ -312,6 +455,40 @@ export default function App() {
   const recommendedTaskText = recommendedTask
     ? `${recommendedTask.title}（${recommendedTask.status === 'doing' ? '进行中' : '待做'}）`
     : '暂无任务，建议从习题导向筛选开始'
+  const todayAction = latestDoingTask
+    ? {
+        title: latestDoingTask.title,
+        reason: '因为它已经处于进行中，优先继续能减少切换成本。',
+        mode: latestDoingTask.nextMode,
+        prompt: getTaskPrompt(latestDoingTask),
+      }
+    : latestTodoTask
+      ? {
+          title: latestTodoTask.title,
+          reason: '因为它是最新待做任务，适合接着推进闭环。',
+          mode: latestTodoTask.nextMode,
+          prompt: getTaskPrompt(latestTodoTask),
+        }
+      : latestMistake
+        ? {
+            title: `复盘错题：${latestMistake.reason}`,
+            reason: '因为已有错题记录，先复盘最近错题能补上学习闭环。',
+            mode: 'mistake-diagnosis' as AssistantMode,
+            prompt: `复盘这道错题：${summarizeInput(latestMistake.questionText)}；错因：${latestMistake.reason}；下一步：${latestMistake.nextAction}`,
+          }
+        : latestLowMasteryRecord
+          ? {
+              title: `补低掌握度：${latestLowMasteryRecord.topic}`,
+              reason: '因为这个知识点掌握度不高，适合先回看并做一次针对性练习。',
+              mode: 'lecture-quick-understand' as AssistantMode,
+              prompt: `复盘低掌握度知识点：${latestLowMasteryRecord.topic}；当前掌握度：${latestLowMasteryRecord.level}；证据：${latestLowMasteryRecord.evidence}`,
+            }
+          : {
+              title: '从习题导向筛选开始',
+              reason: '因为当前还没有足够本地记录，先用一道题建立第一条闭环。',
+              mode: 'exercise-filter' as AssistantMode,
+              prompt: '',
+            }
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -330,6 +507,23 @@ export default function App() {
             当前课程：{course.name}
           </p>
         </header>
+
+        <section className="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-700">今日学习入口</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-950">当前最该做：{todayAction.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">推荐原因：{todayAction.reason}</p>
+            </div>
+            <button
+              className="rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+              type="button"
+              onClick={() => continueWithMode(todayAction.mode, todayAction.prompt)}
+            >
+              继续这个任务
+            </button>
+          </div>
+        </section>
 
         <section className="rounded-lg border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
@@ -406,10 +600,34 @@ export default function App() {
             </p>
           </div>
           <div className="mt-4 grid gap-4 text-sm leading-6 md:grid-cols-2 xl:grid-cols-4">
-            <RecordItem label="当前最该做的一件事" value={recommendedTaskText} />
-            <RecordItem label="未完成任务数" value={`${unfinishedTaskCount} 个`} />
-            <RecordItem label="错题数" value={`${course.mistakes.length} 条`} />
-            <RecordItem label="最低掌握度 topic" value={lowestMasteryTopic ?? '暂无记录'} />
+            <ActionSummaryCard
+              actionLabel="继续"
+              label="当前最该做的一件事"
+              value={todayAction.title}
+              onAction={() => continueWithMode(todayAction.mode, todayAction.prompt)}
+            />
+            <ActionSummaryCard
+              actionLabel={recommendedTask ? '继续' : '开始'}
+              label="未完成任务"
+              value={`${unfinishedTaskCount} 个`}
+              onAction={recommendedTask ? () => handleContinueTask(recommendedTask) : handleStartLearningLoop}
+            />
+            <ActionSummaryCard
+              actionLabel={latestMistake ? '复盘' : '查看'}
+              label="待复盘错题"
+              value={`${course.mistakes.length} 条`}
+              onAction={latestMistake ? () => handleContinueMistake(latestMistake) : undefined}
+            />
+            <ActionSummaryCard
+              actionLabel={latestLowMasteryRecord ? '复盘' : '查看'}
+              label="低掌握度知识点"
+              value={lowestMasteryTopic ?? `${lowMasteryCount} 个`}
+              onAction={
+                latestLowMasteryRecord
+                  ? () => handleReviewMastery(latestLowMasteryRecord)
+                  : undefined
+              }
+            />
           </div>
         </section>
 
@@ -426,6 +644,13 @@ export default function App() {
             >
               清空本地演示数据
             </button>
+            <button
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+              type="button"
+              onClick={handleExportMarkdown}
+            >
+              导出本地记录为 Markdown
+            </button>
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -437,7 +662,12 @@ export default function App() {
 
             <LocalList title="下一步任务" emptyText="暂无任务">
               {latestTasks.map((task) => (
-                <TaskListItem key={task.id} task={task} onUpdateStatus={handleUpdateTaskStatus} />
+                <TaskListItem
+                  key={task.id}
+                  task={task}
+                  onContinueTask={handleContinueTask}
+                  onUpdateStatus={handleUpdateTaskStatus}
+                />
               ))}
             </LocalList>
 
@@ -505,10 +735,11 @@ function RunListItem({ run }: { run: AssistantRun }) {
 
 type TaskListItemProps = {
   task: StudyTask
+  onContinueTask: (task: StudyTask) => void
   onUpdateStatus: (taskId: string, status: StudyTask['status']) => void
 }
 
-function TaskListItem({ task, onUpdateStatus }: TaskListItemProps) {
+function TaskListItem({ task, onContinueTask, onUpdateStatus }: TaskListItemProps) {
   return (
     <article className="rounded-md bg-white p-4 text-sm leading-6 shadow-sm">
       <p className="font-semibold text-slate-950">{task.title}</p>
@@ -516,6 +747,13 @@ function TaskListItem({ task, onUpdateStatus }: TaskListItemProps) {
       <p className="text-slate-600">下一步模式：{getModeName(task.nextMode)}</p>
       <p className="text-slate-600">状态：{task.status}</p>
       <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+          type="button"
+          onClick={() => onContinueTask(task)}
+        >
+          继续此任务
+        </button>
         <StatusButton
           isActive={task.status === 'todo'}
           label="待做"
@@ -580,16 +818,32 @@ function MasteryListItem({ record }: { record: MasteryRecord }) {
   )
 }
 
-type RecordItemProps = {
+type ActionSummaryCardProps = {
+  actionLabel: string
   label: string
   value: string
+  onAction?: () => void
 }
 
-function RecordItem({ label, value }: RecordItemProps) {
+function ActionSummaryCard({ actionLabel, label, value, onAction }: ActionSummaryCardProps) {
   return (
-    <div className="rounded-md bg-slate-50 p-4">
-      <p className="font-semibold text-slate-950">{label}</p>
-      <p className="mt-1 text-slate-600">{value}</p>
+    <div className="flex min-h-32 flex-col justify-between rounded-md bg-slate-50 p-4">
+      <div>
+        <p className="font-semibold text-slate-950">{label}</p>
+        <p className="mt-1 text-slate-600">{value}</p>
+      </div>
+      <button
+        className={`mt-4 self-start rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+          onAction
+            ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+            : 'cursor-not-allowed border-slate-200 bg-white text-slate-400'
+        }`}
+        type="button"
+        disabled={!onAction}
+        onClick={onAction}
+      >
+        {actionLabel}
+      </button>
     </div>
   )
 }
