@@ -24,6 +24,18 @@ import type {
 
 const workflowText = studyModes.map((mode) => mode.name).join(' → ')
 
+type GenerationProvider = 'mock' | 'openai' | 'deepseek'
+
+type AiStudyResult = {
+  conclusion: string
+  facts: string
+  inferences: string
+  suggestions: string
+  uncertainty: string
+  verificationMethod: string
+  nextStep: string
+}
+
 function createId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
@@ -48,6 +60,57 @@ function formatStructuredResult(result: StructuredMockResult) {
     `如何验证：${result.verification}`,
     `建议下一步：${result.nextAction}`,
   ].join('\n')
+}
+
+function mapAiResultToStructuredResult(result: AiStudyResult): StructuredMockResult {
+  return {
+    conclusion: result.conclusion,
+    facts: result.facts,
+    inference: result.inferences,
+    suggestion: result.suggestions,
+    uncertainty: result.uncertainty,
+    verification: result.verificationMethod,
+    nextAction: result.nextStep,
+  }
+}
+
+function isAiStudyResult(value: unknown): value is AiStudyResult {
+  const result = value as AiStudyResult
+
+  return (
+    typeof result?.conclusion === 'string' &&
+    typeof result.facts === 'string' &&
+    typeof result.inferences === 'string' &&
+    typeof result.suggestions === 'string' &&
+    typeof result.uncertainty === 'string' &&
+    typeof result.verificationMethod === 'string' &&
+    typeof result.nextStep === 'string'
+  )
+}
+
+async function requestAiStudyResult(
+  provider: Exclude<GenerationProvider, 'mock'>,
+  mode: AssistantMode,
+  input: string,
+  masteryLevel: MasteryLevel,
+  mistakeReason: MistakeReason,
+) {
+  const response = await fetch('/api/generateStudyResult', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, mode, input, masteryLevel, mistakeReason }),
+  })
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data?.error ?? 'AI 生成失败，请切换到 Mock 演示或稍后重试。')
+  }
+
+  if (!isAiStudyResult(data?.result)) {
+    throw new Error('AI 返回格式不完整，请切换到 Mock 演示或稍后重试。')
+  }
+
+  return mapAiResultToStructuredResult(data.result)
 }
 
 function getModeName(mode: AssistantMode) {
@@ -285,6 +348,9 @@ export default function App() {
   const [mistakeReason, setMistakeReason] = useState<MistakeReason>('题意错误')
   const [generatedResult, setGeneratedResult] = useState<StructuredMockResult | null>(null)
   const [saveMessage, setSaveMessage] = useState('')
+  const [generationProvider, setGenerationProvider] = useState<GenerationProvider>('mock')
+  const [generationError, setGenerationError] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const selectedMode =
     studyModes.find((mode) => mode.id === selectedModeId) ?? studyModes[0]
@@ -306,6 +372,7 @@ export default function App() {
     setGeneratedResult(null)
     setFormInput(prompt)
     setSaveMessage('')
+    setGenerationError('')
     focusInputArea()
   }
 
@@ -315,6 +382,12 @@ export default function App() {
     setGeneratedResult(null)
     setFormInput('')
     setSaveMessage('')
+    setGenerationError('')
+  }
+
+  function handleGenerationProviderChange(provider: GenerationProvider) {
+    setGenerationProvider(provider)
+    setGenerationError('')
   }
 
   function handleStartLearningLoop() {
@@ -354,10 +427,7 @@ export default function App() {
     downloadTextFile('study-agent-demo-records.md', createMarkdownExport(course))
   }
 
-  function handleGenerateResult() {
-    const createdAt = new Date().toISOString()
-    const input = formInput.trim() || selectedMode.formPlaceholder
-    const result = createResultForMode(selectedMode, course)
+  function saveGeneratedResult(result: StructuredMockResult, input: string, createdAt: string) {
     const output = formatStructuredResult(result)
     const topic = deriveTopic(selectedMode.name, input)
     const pageRange = extractPageRange(input)
@@ -417,6 +487,49 @@ export default function App() {
     setSaveMessage('已保存到本地学习记录，并生成下一步任务。')
   }
 
+  async function handleGenerateResult() {
+    const createdAt = new Date().toISOString()
+    const input = formInput.trim() || selectedMode.formPlaceholder
+
+    setGenerationError('')
+    setSaveMessage('')
+
+    if (generationProvider === 'mock') {
+      saveGeneratedResult(createResultForMode(selectedMode, course), input, createdAt)
+      return
+    }
+
+    const pastedInput = formInput.trim()
+
+    if (!pastedInput) {
+      setGenerationError('AI 生成需要先粘贴文本。你也可以切换到 Mock 演示。')
+      return
+    }
+
+    try {
+      setIsGenerating(true)
+      const result = await requestAiStudyResult(
+        generationProvider,
+        selectedMode.assistantMode,
+        pastedInput,
+        masteryLevel,
+        mistakeReason,
+      )
+
+      saveGeneratedResult(result, pastedInput, createdAt)
+    } catch (error) {
+      setGenerationError(
+        error instanceof Error
+          ? `${error.message} 可切换到 Mock 演示继续体验。`
+          : 'AI 生成失败，请切换到 Mock 演示或稍后重试。',
+      )
+      setGeneratedModeId(null)
+      setGeneratedResult(null)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   function handleUpdateTaskStatus(taskId: string, status: StudyTask['status']) {
     const updatedCourse = updateTaskStatus(course.id, taskId, status)
 
@@ -438,6 +551,7 @@ export default function App() {
     setGeneratedResult(null)
     setFormInput('')
     setSaveMessage('')
+    setGenerationError('')
   }
 
   const recommendedTask = getRecommendedTask(course.tasks)
@@ -551,12 +665,16 @@ export default function App() {
           inputValue={formInput}
           masteryLevel={masteryLevel}
           mistakeReason={mistakeReason}
+          generationProvider={generationProvider}
           generatedResult={generatedResult}
           showResult={generatedModeId === selectedMode.id}
           saveMessage={saveMessage}
+          generationError={generationError}
+          isGenerating={isGenerating}
           onInputChange={setFormInput}
           onMasteryLevelChange={setMasteryLevel}
           onMistakeReasonChange={setMistakeReason}
+          onGenerationProviderChange={handleGenerationProviderChange}
           onGenerate={handleGenerateResult}
         />
 
@@ -669,14 +787,14 @@ export default function App() {
           <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-5">
             <h2 className="text-base font-bold text-amber-950">当前能力边界</h2>
             <p className="mt-3 text-sm leading-7 text-amber-900">
-              当前版本为本地前端演示：不解析 PDF、不接真实 AI、不自动验证课件内容；结果用于展示学习闭环结构。
+              当前 v0.2 支持粘贴文本的 AI 生成，可选择 OpenAI 或 DeepSeek；仍不解析 PDF、不上传文件、不自动验证课件内容。
             </p>
           </div>
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm font-semibold text-blue-600">路线图</p>
-          <h2 className="mt-2 text-xl font-bold text-slate-950">从本地闭环到 AI 学习助手</h2>
+          <h2 className="mt-2 text-xl font-bold text-slate-950">从粘贴文本到完整复习闭环</h2>
           <div className="mt-5 grid gap-3 text-sm leading-6 md:grid-cols-2 xl:grid-cols-5">
             <RoadmapItem title="v0.1.x" text="本地闭环学习任务管理" />
             <RoadmapItem title="v0.2" text="AI 处理粘贴文本" />
@@ -687,7 +805,7 @@ export default function App() {
         </section>
 
         <footer className="flex flex-col gap-3 border-t border-slate-200 py-6 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-semibold text-slate-700">当前版本：v0.1.6</p>
+          <p className="font-semibold text-slate-700">当前版本：v0.2</p>
           <div className="flex flex-wrap gap-4">
             <a
               className="font-semibold text-blue-600 transition hover:text-blue-800"

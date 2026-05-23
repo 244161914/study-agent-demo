@@ -23,32 +23,41 @@ type ModeDetailPanelProps = {
   inputValue: string
   masteryLevel: MasteryLevel
   mistakeReason: MistakeReason
+  generationProvider: 'mock' | 'openai' | 'deepseek'
   generatedResult: StructuredMockResult | null
   showResult: boolean
   saveMessage: string
+  generationError: string
+  isGenerating: boolean
   onInputChange: (value: string) => void
   onMasteryLevelChange: (level: MasteryLevel) => void
   onMistakeReasonChange: (reason: MistakeReason) => void
+  onGenerationProviderChange: (provider: 'mock' | 'openai' | 'deepseek') => void
   onGenerate: () => void
 }
 
 const v0LimitText =
-  '当前为 v0 前端演示版：不真实解析 PDF，不接真实 AI，不自动验证课件内容；仅展示学习闭环和结构化输出。'
+  '当前 v0.2 支持粘贴文本的 AI 生成，可选择 OpenAI 或 DeepSeek；仍不解析 PDF、不上传文件、不自动验证课件内容。'
 
 export function ModeDetailPanel({
   mode,
   inputValue,
   masteryLevel,
   mistakeReason,
+  generationProvider,
   generatedResult,
   showResult,
   saveMessage,
+  generationError,
+  isGenerating,
   onInputChange,
   onMasteryLevelChange,
   onMistakeReasonChange,
+  onGenerationProviderChange,
   onGenerate,
 }: ModeDetailPanelProps) {
   const isMistakeMode = mode.assistantMode === 'mistake-diagnosis'
+  const isAiProvider = generationProvider !== 'mock'
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -62,7 +71,7 @@ export function ModeDetailPanel({
         <InfoBlock title="输入内容" text={mode.input} />
         <InfoBlock title="输出内容" text={mode.output} />
         <InfoBlock title="下一步进入哪个模式" text={`进入「${mode.nextStep}」`} />
-        <InfoBlock title="v0 限制提示" text={v0LimitText} />
+        <InfoBlock title="当前能力边界" text={v0LimitText} />
       </div>
 
       <form className="mt-6 space-y-3" onSubmit={(event) => event.preventDefault()}>
@@ -129,14 +138,57 @@ export function ModeDetailPanel({
           </label>
         )}
 
-        <button
-          className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
-          type="button"
-          onClick={onGenerate}
-        >
-          生成结构化结果
-        </button>
+        <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <legend className="text-sm font-semibold text-slate-950">生成提供方</legend>
+          <div className="flex flex-wrap gap-2">
+            <GenerationProviderButton
+              isActive={generationProvider === 'mock'}
+              label="Mock 演示"
+              onClick={() => onGenerationProviderChange('mock')}
+            />
+            <GenerationProviderButton
+              isActive={generationProvider === 'openai'}
+              label="OpenAI AI"
+              onClick={() => onGenerationProviderChange('openai')}
+            />
+            <GenerationProviderButton
+              isActive={generationProvider === 'deepseek'}
+              label="DeepSeek AI"
+              onClick={() => onGenerationProviderChange('deepseek')}
+            />
+          </div>
+          <p className="text-xs leading-5 text-slate-500">
+            AI 提供方只处理你粘贴到文本框里的内容；不会上传文件，也不会解析 PDF。默认使用 Mock 演示。
+          </p>
+        </fieldset>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-slate-400"
+            type="button"
+            disabled={isGenerating}
+            onClick={onGenerate}
+          >
+            {isGenerating ? '生成中...' : '生成结构化结果'}
+          </button>
+          {isAiProvider && (
+            <span className="text-sm text-slate-500">AI 失败时不会保存记录，可切回 Mock 演示。</span>
+          )}
+        </div>
       </form>
+
+      {generationError && (
+        <div className="mt-4 flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <p>{generationError}</p>
+          <button
+            className="self-start rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+            type="button"
+            onClick={() => onGenerationProviderChange('mock')}
+          >
+            改用 Mock 演示
+          </button>
+        </div>
+      )}
 
       {saveMessage && (
         <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
@@ -146,7 +198,9 @@ export function ModeDetailPanel({
 
       {showResult && generatedResult && (
         <section className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-5">
-          <h3 className="text-lg font-bold text-emerald-950">模拟结构化结果</h3>
+          <h3 className="text-lg font-bold text-emerald-950">
+            {isAiProvider ? 'AI 结构化结果' : '模拟结构化结果'}
+          </h3>
           <div className="mt-4 grid gap-3 text-sm leading-6 md:grid-cols-2">
             <InfoBlock title="结论" text={generatedResult.conclusion} />
             <InfoBlock title="事实" text={generatedResult.facts} />
@@ -159,6 +213,28 @@ export function ModeDetailPanel({
         </section>
       )}
     </section>
+  )
+}
+
+type GenerationProviderButtonProps = {
+  isActive: boolean
+  label: string
+  onClick: () => void
+}
+
+function GenerationProviderButton({ isActive, label, onClick }: GenerationProviderButtonProps) {
+  return (
+    <button
+      className={`rounded-md border px-4 py-2 text-sm font-semibold transition ${
+        isActive
+          ? 'border-blue-500 bg-blue-600 text-white'
+          : 'border-slate-300 bg-white text-slate-700 hover:border-blue-300'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      {label}
+    </button>
   )
 }
 
