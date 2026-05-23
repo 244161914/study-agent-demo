@@ -34,25 +34,9 @@ export function ModeCard({ mode, isActive, onSelect }: ModeCardProps) {
 
       <p className="mt-4 text-base leading-7 text-slate-700">{mode.purpose}</p>
 
-      <div className="mt-5 space-y-4 text-sm leading-6">
-        <section>
-          <h3 className="font-semibold text-slate-950">输入内容</h3>
-          <p className="mt-1 text-slate-600">{mode.input}</p>
-        </section>
-        <section>
-          <h3 className="font-semibold text-slate-950">输出内容</h3>
-          <p className="mt-1 text-slate-600">{mode.output}</p>
-        </section>
-        <section>
-          <h3 className="font-semibold text-slate-950">下一步</h3>
-          <p className="mt-1 text-slate-600">进入「{mode.nextStep}」</p>
-        </section>
-      </div>
-
-      <div className="mt-auto pt-5">
-        <span className="block w-full rounded-md border border-slate-300 bg-slate-50 px-4 py-2.5 text-center text-sm font-semibold text-slate-700">
-          {mode.status}
-        </span>
+      <div className="mt-5 rounded-md bg-slate-50 p-4 text-sm leading-6">
+        <h3 className="font-semibold text-slate-950">下一步</h3>
+        <p className="mt-1 text-slate-600">进入「{mode.nextStep}」</p>
       </div>
     </button>
   )

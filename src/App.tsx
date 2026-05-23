@@ -95,6 +95,22 @@ function getRecentLowMasteryTopic(mastery: MasteryRecord[]) {
   return [...mastery].reverse().find((record) => record.level <= 2)?.topic
 }
 
+function getLowestMasteryTopic(mastery: MasteryRecord[]) {
+  const lowestRecord = [...mastery].sort((a, b) => a.level - b.level)[0]
+
+  return lowestRecord?.topic
+}
+
+function getRecommendedTask(tasks: StudyTask[]) {
+  const latestDoingTask = [...tasks].reverse().find((task) => task.status === 'doing')
+
+  if (latestDoingTask) {
+    return latestDoingTask
+  }
+
+  return [...tasks].reverse().find((task) => task.status === 'todo')
+}
+
 function createExamPlannerResult(course: Course): StructuredMockResult {
   const unfinishedTasks = course.tasks.filter((task) => task.status !== 'done')
   const mostCommonReason = getMostCommonMistakeReason(course.mistakes)
@@ -163,6 +179,41 @@ export default function App() {
     setGeneratedResult(null)
     setFormInput('')
     setSaveMessage('')
+  }
+
+  function handleStartLearningLoop() {
+    handleSelectMode(studyModes[0].id)
+
+    window.setTimeout(() => {
+      const inputElement = document.getElementById('mode-input')
+
+      inputElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      inputElement?.focus()
+    }, 0)
+  }
+
+  function handleContinueLastTask() {
+    const task = getRecommendedTask(course.tasks)
+
+    if (!task) {
+      handleStartLearningLoop()
+      return
+    }
+
+    const nextMode = studyModes.find((mode) => mode.assistantMode === task.nextMode)
+
+    if (nextMode) {
+      handleSelectMode(nextMode.id)
+    }
+
+    setFormInput(task.title)
+
+    window.setTimeout(() => {
+      const inputElement = document.getElementById('mode-input')
+
+      inputElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      inputElement?.focus()
+    }, 0)
   }
 
   function handleGenerateResult() {
@@ -251,12 +302,16 @@ export default function App() {
     setSaveMessage('')
   }
 
-  const latestRun = course.runs.at(-1)
-  const latestTask = course.tasks.at(-1)
+  const recommendedTask = getRecommendedTask(course.tasks)
+  const unfinishedTaskCount = course.tasks.filter((task) => task.status !== 'done').length
+  const lowestMasteryTopic = getLowestMasteryTopic(course.mastery)
   const latestRuns = getLatestItems(course.runs)
   const latestTasks = getLatestItems(course.tasks)
   const latestMistakes = getLatestItems(course.mistakes)
   const latestMasteryRecords = getLatestItems(course.mastery)
+  const recommendedTaskText = recommendedTask
+    ? `${recommendedTask.title}（${recommendedTask.status === 'doing' ? '进行中' : '待做'}）`
+    : '暂无任务，建议从习题导向筛选开始'
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -276,35 +331,85 @@ export default function App() {
           </p>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-5">
-            <h2 className="text-base font-bold text-blue-950">学习闭环顺序</h2>
-            <p className="mt-3 text-sm leading-7 text-blue-900">{workflowText}</p>
-          </div>
+        <section className="rounded-lg border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold text-blue-600">推荐开始方式</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-950">第一次使用先跑一遍闭环</h2>
+              <p className="mt-3 text-base leading-7 text-slate-700">
+                第一次使用建议：点击「开始一次学习闭环」→ 点击「填入示例」→ 点击「生成结构化结果」。
+              </p>
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                <button
+                  className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
+                  type="button"
+                  onClick={handleStartLearningLoop}
+                >
+                  开始一次学习闭环
+                </button>
+                <button
+                  className="rounded-md border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                  type="button"
+                  onClick={handleContinueLastTask}
+                >
+                  继续上次任务
+                </button>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{recommendedTaskText}</p>
+            </div>
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-            <h2 className="text-base font-bold text-amber-950">v0 限制提示</h2>
-            <p className="mt-3 text-sm leading-7 text-amber-900">
-              当前为 v0 前端演示版：不真实解析 PDF，不接真实 AI，不自动验证课件内容；仅展示学习闭环和结构化输出。
-            </p>
+            <ol className="grid gap-3 text-sm leading-6">
+              <li className="rounded-md bg-blue-50 p-4 text-blue-950">
+                <span className="font-bold">1. 选模式</span>
+              </li>
+              <li className="rounded-md bg-slate-50 p-4 text-slate-800">
+                <span className="font-bold">2. 填信息或用示例</span>
+              </li>
+              <li className="rounded-md bg-slate-50 p-4 text-slate-800">
+                <span className="font-bold">3. 生成结果并保存下一步任务</span>
+              </li>
+            </ol>
           </div>
         </section>
+
+        <section aria-label="五个学习模式" className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {studyModes.map((mode) => (
+            <ModeCard
+              key={mode.id}
+              mode={mode}
+              isActive={mode.id === selectedMode.id}
+              onSelect={() => handleSelectMode(mode.id)}
+            />
+          ))}
+        </section>
+
+        <ModeDetailPanel
+          mode={selectedMode}
+          inputValue={formInput}
+          masteryLevel={masteryLevel}
+          mistakeReason={mistakeReason}
+          generatedResult={generatedResult}
+          showResult={generatedModeId === selectedMode.id}
+          saveMessage={saveMessage}
+          onInputChange={setFormInput}
+          onMasteryLevelChange={setMasteryLevel}
+          onMistakeReasonChange={setMistakeReason}
+          onGenerate={handleGenerateResult}
+        />
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-2 border-b border-slate-200 pb-4">
             <p className="text-sm font-semibold text-blue-600">本地学习记录</p>
             <h2 className="text-xl font-bold text-slate-950">{course.name}</h2>
+            <p className="text-sm leading-6 text-slate-600">
+              当前记录只保存在本浏览器，不上传云端；清除浏览器数据会丢失记录。
+            </p>
           </div>
-          <div className="mt-4 grid gap-4 text-sm leading-6 md:grid-cols-3 xl:grid-cols-6">
-            <RecordItem label="已保存结果" value={`${course.runs.length} 条`} />
-            <RecordItem label="任务数" value={`${course.tasks.length} 个`} />
+          <div className="mt-4 grid gap-4 text-sm leading-6 md:grid-cols-2 xl:grid-cols-4">
+            <RecordItem label="当前最该做的一件事" value={recommendedTaskText} />
+            <RecordItem label="未完成任务数" value={`${unfinishedTaskCount} 个`} />
             <RecordItem label="错题数" value={`${course.mistakes.length} 条`} />
-            <RecordItem label="掌握度记录数" value={`${course.mastery.length} 条`} />
-            <RecordItem
-              label="最新生成模式"
-              value={latestRun ? getModeName(latestRun.mode) : '暂无记录'}
-            />
-            <RecordItem label="最新任务" value={latestTask?.title ?? '暂无任务'} />
+            <RecordItem label="最低掌握度 topic" value={lowestMasteryTopic ?? '暂无记录'} />
           </div>
         </section>
 
@@ -350,30 +455,19 @@ export default function App() {
           </div>
         </section>
 
-        <section aria-label="五个学习模式" className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {studyModes.map((mode) => (
-            <ModeCard
-              key={mode.id}
-              mode={mode}
-              isActive={mode.id === selectedMode.id}
-              onSelect={() => handleSelectMode(mode.id)}
-            />
-          ))}
-        </section>
+        <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-5">
+            <h2 className="text-base font-bold text-blue-950">学习闭环顺序</h2>
+            <p className="mt-3 text-sm leading-7 text-blue-900">{workflowText}</p>
+          </div>
 
-        <ModeDetailPanel
-          mode={selectedMode}
-          inputValue={formInput}
-          masteryLevel={masteryLevel}
-          mistakeReason={mistakeReason}
-          generatedResult={generatedResult}
-          showResult={generatedModeId === selectedMode.id}
-          saveMessage={saveMessage}
-          onInputChange={setFormInput}
-          onMasteryLevelChange={setMasteryLevel}
-          onMistakeReasonChange={setMistakeReason}
-          onGenerate={handleGenerateResult}
-        />
+          <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-5">
+            <h2 className="text-base font-bold text-amber-950">v0 限制提示</h2>
+            <p className="mt-3 text-sm leading-7 text-amber-900">
+              当前为 v0 前端演示版：不真实解析 PDF，不接真实 AI，不自动验证课件内容；仅展示学习闭环和结构化输出。
+            </p>
+          </div>
+        </section>
       </section>
     </main>
   )
@@ -389,12 +483,12 @@ function LocalList({ title, emptyText, children }: LocalListProps) {
   const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children)
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <h3 className="font-bold text-slate-950">{title}</h3>
+    <details className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <summary className="cursor-pointer font-bold text-slate-950">{title}</summary>
       <div className="mt-3 space-y-3">
         {hasChildren ? children : <p className="text-sm text-slate-500">{emptyText}</p>}
       </div>
-    </section>
+    </details>
   )
 }
 

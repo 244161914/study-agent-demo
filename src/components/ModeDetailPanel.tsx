@@ -2,11 +2,11 @@ import type { StructuredMockResult, StudyMode } from '../data/studyModes'
 import type { MasteryLevel, MistakeReason } from '../types/study'
 
 const masteryOptions: { level: MasteryLevel; label: string }[] = [
-  { level: 0, label: '0 完全不会' },
-  { level: 1, label: '1 看答案能懂' },
-  { level: 2, label: '2 能套模板做标准题' },
-  { level: 3, label: '3 能独立做变式题' },
-  { level: 4, label: '4 能限时做对并检查' },
+  { level: 0, label: '0 Again / 完全不会' },
+  { level: 1, label: '1 Hard / 看答案才懂' },
+  { level: 2, label: '2 Good- / 能套模板' },
+  { level: 3, label: '3 Good / 能做变式' },
+  { level: 4, label: '4 Easy / 考试可用' },
 ]
 
 const mistakeReasons: MistakeReason[] = [
